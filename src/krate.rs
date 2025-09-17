@@ -18,10 +18,10 @@ impl Crate {
         }
     }
 
-    pub fn write_to_directory(&self, path: &Utf8Path) -> Result<()> {
+    pub fn write_to_directory(&self, path: &Utf8Path, overwrite: bool) -> Result<()> {
         let manifest_path = path.join("Cargo.toml");
 
-        if path.exists() {
+        if !overwrite && path.exists() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
                 "Directory already exists",

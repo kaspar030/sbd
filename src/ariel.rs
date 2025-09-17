@@ -19,6 +19,10 @@ pub struct GenerateArielArgs {
     #[argh(positional)]
     sbd_dir: String,
 
+    /// overwrite existing files
+    #[argh(switch)]
+    overwrite: bool,
+
     /// ariel os boards crate output folder
     #[argh(option, short = 'o', default = "String::from(\"ariel-os-boards\")")]
     output: String,
@@ -43,12 +47,12 @@ pub fn generate(args: GenerateArielArgs) -> Result<()> {
     let sbd_file = parse_sbd_files(args.sbd_dir.as_str())?;
 
     // Finally, render the ariel crate.
-    render_ariel_board_crate(&sbd_file, args.output.as_str().into())?;
+    render_ariel_board_crate(&sbd_file, args.output.as_str().into(), args.overwrite)?;
 
     Ok(())
 }
 
-pub fn render_ariel_board_crate(sbd: &SbdFile, out: &Utf8Path) -> Result<()> {
+pub fn render_ariel_board_crate(sbd: &SbdFile, out: &Utf8Path, overwrite: bool) -> Result<()> {
     let mut board_crate = Crate::new("ariel-os-boards");
 
     let socs: HashSet<String> = HashSet::from_iter(
@@ -178,7 +182,7 @@ pub fn render_ariel_board_crate(sbd: &SbdFile, out: &Utf8Path) -> Result<()> {
         board_crate.files.insert("laze.yml".into(), laze_file_str);
     }
 
-    board_crate.write_to_directory(out)?;
+    board_crate.write_to_directory(out, overwrite)?;
     Ok(())
 }
 
