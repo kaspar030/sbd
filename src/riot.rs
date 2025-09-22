@@ -1,4 +1,5 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::Write as _;
 
 use anyhow::{Result, anyhow};
 use camino::{Utf8Path, Utf8PathBuf};
@@ -6,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     parse_sbd_files,
-    sbd::{Board, Button, Led, SbdFile},
+    sbd::{Board, SbdFile},
     utils::write_all,
 };
 
@@ -39,10 +40,7 @@ pub struct RiotChipMapEntry {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct RiotBoardExt {
-    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub flags: BTreeSet<String>,
-    // #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    // pub global_env: BTreeMap<String, StringOrVecString>,
+    // TODO
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
@@ -86,6 +84,7 @@ struct CFile {
 }
 
 impl CFile {
+    #[expect(dead_code, reason = "currently unused, unmark when it is")]
     pub fn new() -> Self {
         Self {
             ..Default::default()
@@ -100,7 +99,7 @@ impl CFile {
         }
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn render(&self) -> String {
         let mut s = String::new();
         if self.pragma_once {
             s.push_str("#pragma once\n");
@@ -108,7 +107,7 @@ impl CFile {
         if !self.includes.is_empty() {
             s.push('\n');
             for include in &self.includes {
-                s.push_str(&format!("#include {}\n", include));
+                let _ = writeln!(s, "#include {include}");
             }
         }
         if self.cplusplus_guards {
@@ -124,7 +123,7 @@ impl CFile {
     }
 }
 
-pub fn generate(args: GenerateRiotArgs) -> Result<()> {
+pub fn generate(args: &GenerateRiotArgs) -> Result<()> {
     let sbd_file = parse_sbd_files(args.sbd_dir.as_str())?;
 
     render_riot_boards_dir(&sbd_file, args.output.as_str().into())?;
@@ -133,8 +132,14 @@ pub fn generate(args: GenerateRiotArgs) -> Result<()> {
 }
 
 pub fn render_riot_boards_dir(sbd: &SbdFile, out: &Utf8Path) -> Result<()> {
-    let chips: HashSet<String> =
-        HashSet::from_iter(sbd.riot.clone().unwrap_or_default().chips.keys().cloned());
+    let chips: HashSet<String> = sbd
+        .riot
+        .clone()
+        .unwrap_or_default()
+        .chips
+        .keys()
+        .cloned()
+        .collect::<HashSet<_>>();
 
     if chips.is_empty() {
         println!("warning: No supported chips defined for RIOT OS");
@@ -178,6 +183,7 @@ pub fn render_riot_boards_dir(sbd: &SbdFile, out: &Utf8Path) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 fn generate_riot_board(sbd: &SbdFile, board: &Board) -> Result<RiotBoard> {
     let mut riot_board = RiotBoard::new(&board.name);
 
@@ -185,7 +191,7 @@ fn generate_riot_board(sbd: &SbdFile, board: &Board) -> Result<RiotBoard> {
     let mut board_h = CFile::new_header();
 
     let mut makefile = String::new();
-    let mut makefile_dep = String::new();
+    let makefile_dep = String::new();
     let mut makefile_features = String::new();
     let mut makefile_include = String::new();
 
@@ -202,8 +208,8 @@ fn generate_riot_board(sbd: &SbdFile, board: &Board) -> Result<RiotBoard> {
 
     // both unwraps should always succeed (filtered in caller)
     let riot_chip = sbd.riot.as_ref().unwrap().chips.get(&board.chip).unwrap();
-    makefile_features.push_str(&format!("CPU = {}\n", riot_chip.cpu));
-    makefile_features.push_str(&format!("CPU_MODEL = {}\n", riot_chip.cpu_model));
+    let _ = writeln!(makefile_features, "CPU = {}", riot_chip.cpu);
+    let _ = writeln!(makefile_features, "CPU_MODEL = {}", riot_chip.cpu_model);
 
     // handle file quirks
     let quirk_file_map = [
@@ -223,7 +229,7 @@ fn generate_riot_board(sbd: &SbdFile, board: &Board) -> Result<RiotBoard> {
 
     // Debugger
     if let Some(debugger) = &board.debugger {
-        makefile_include.push_str(&format!("PROGRAMMER ?= {}\n", debugger._type));
+        let _ = writeln!(makefile_include, "PROGRAMMER ?= {}", debugger.type_);
         if let Some(uart) = &debugger.uart {
             uarts.push(uart);
         }
@@ -236,13 +242,14 @@ fn generate_riot_board(sbd: &SbdFile, board: &Board) -> Result<RiotBoard> {
     let mut uarts_configured = Vec::new();
     for uart in uarts {
         // get the map key of the peripheral that works for this UART's pins
+        #[expect(clippy::unnecessary_find_map)]
         let peripheral_key = uart_peripherals
             .iter()
-            .find_map(|(key, peripheral)| {
+            .find_map(|(key, _peripheral)| {
                 // TODO: actually do filter/select by possible pins
                 Some(key)
             })
-            .map(|key| key.to_string())
+            .map(std::string::ToString::to_string)
             .clone();
 
         if let Some(key) = peripheral_key {
@@ -258,7 +265,7 @@ fn generate_riot_board(sbd: &SbdFile, board: &Board) -> Result<RiotBoard> {
             println!(
                 "warning: {}: no peripheral found for UART {}",
                 board.name,
-                uart.name.as_ref().map_or_else(|| "unnamed", |s| &s)
+                uart.name.as_ref().map_or_else(|| "unnamed", |s| s)
             );
         }
     }
@@ -273,8 +280,8 @@ fn generate_riot_board(sbd: &SbdFile, board: &Board) -> Result<RiotBoard> {
             s.push_str("static const uart_conf_t uart_config[] = {\n");
             for (uart_cfg, _) in &uarts_configured {
                 s.push_str("    {\n");
-                for (k, v) in uart_cfg.iter() {
-                    s.push_str(&format!("        .{} = {},\n", k, v));
+                for (k, v) in uart_cfg {
+                    let _ = writeln!(s, "        .{k} = {v},");
                 }
                 s.push_str("    },\n");
             }
@@ -283,7 +290,7 @@ fn generate_riot_board(sbd: &SbdFile, board: &Board) -> Result<RiotBoard> {
 
         for (n, (_, isr)) in uarts_configured.into_iter().enumerate() {
             if let Some(isr) = isr {
-                s.push_str(&format!("#define UART_{n}_ISR          ({isr})\n"));
+                let _ = writeln!(s, "#define UART_{n}_ISR          ({isr})");
             }
         }
 
@@ -297,7 +304,7 @@ fn generate_riot_board(sbd: &SbdFile, board: &Board) -> Result<RiotBoard> {
     // finishing
     if !features.is_empty() {
         for feature in features {
-            makefile_features.push_str(&format!("FEATURES_PROVIDED += {}\n", feature));
+            let _ = writeln!(makefile_features, "FEATURES_PROVIDED += {feature}");
         }
     }
 
@@ -305,10 +312,10 @@ fn generate_riot_board(sbd: &SbdFile, board: &Board) -> Result<RiotBoard> {
 
     riot_board
         .files
-        .insert("include/periph_conf.h".into(), periph_conf_h.to_string());
+        .insert("include/periph_conf.h".into(), periph_conf_h.render());
     riot_board
         .files
-        .insert("include/board.h".into(), board_h.to_string());
+        .insert("include/board.h".into(), board_h.render());
     riot_board.files.insert("Makefile".into(), makefile);
     riot_board.files.insert("Makefile.dep".into(), makefile_dep);
     riot_board
@@ -325,5 +332,5 @@ fn name2riot_pin(gpio_name: &str) -> Result<String> {
     let (port, pin) = crate::pin2tuple::parse_gpio_name(gpio_name)
         .ok_or_else(|| anyhow!("error parsing GPIO name: {}", gpio_name))?;
 
-    Ok(format!("GPIO_PIN({}, {})", port, pin))
+    Ok(format!("GPIO_PIN({port}, {pin})"))
 }

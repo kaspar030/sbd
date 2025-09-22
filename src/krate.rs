@@ -67,6 +67,7 @@ impl StringOrWorkspace {
     pub fn workspace() -> Self {
         Self::Workspace(HashMap::from([("workspace".into(), true)]))
     }
+    #[expect(dead_code, reason = "currently unused, unmark when it is")]
     pub fn string(string: &str) -> Self {
         Self::String(string.into())
     }
@@ -102,6 +103,7 @@ pub struct Package {
     pub rust_version: Option<StringOrWorkspace>,
 }
 
+#[allow(clippy::unnecessary_wraps, reason = "this is a shortcut")]
 pub fn workspace() -> Option<StringOrWorkspace> {
     Some(StringOrWorkspace::workspace())
 }
