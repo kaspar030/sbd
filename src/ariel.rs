@@ -11,7 +11,7 @@ use std::{
 };
 
 use anyhow::Result;
-use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -19,6 +19,7 @@ use crate::{
     laze::{LazeContext, LazeFile, StringOrVecString},
     parse_sbd_files,
     sbd::{Board, Button, Led, SbdFile},
+    utils::FileMap,
 };
 
 #[derive(argh::FromArgs, Debug)]
@@ -34,8 +35,12 @@ pub struct GenerateArielArgs {
     mode: Option<Mode>,
 
     /// ariel os boards crate output folder
-    #[argh(option, short = 'o', default = "String::from(\"ariel-os-boards\")")]
-    output: String,
+    #[argh(
+        option,
+        short = 'o',
+        default = "Utf8PathBuf::from(\"ariel-os-boards\")"
+    )]
+    output: Utf8PathBuf,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -82,14 +87,16 @@ pub fn generate(args: &GenerateArielArgs) -> Result<()> {
     let sbd_file = parse_sbd_files(args.sbd_dir.as_str())?;
     let mode = args.mode.unwrap_or_default();
 
-    // Finally, render the ariel crate.
-    render_ariel_board_crate(&sbd_file, args.output.as_str().into(), mode)?;
+    // Render the ariel crate.
+    let krate = render_ariel_board_crate(&sbd_file);
+
+    crate::utils::write_all(&args.output, &krate, mode == Mode::Overwrite)?;
 
     Ok(())
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn render_ariel_board_crate(sbd: &SbdFile, out: &Utf8Path, mode: Mode) -> Result<()> {
+pub fn render_ariel_board_crate(sbd: &SbdFile) -> FileMap {
     let mut board_crate = Crate::new("ariel-os-boards");
 
     let chips: HashSet<String> = sbd
@@ -229,8 +236,7 @@ pub fn render_ariel_board_crate(sbd: &SbdFile, out: &Utf8Path, mode: Mode) -> Re
         board_crate.files.insert("laze.yml".into(), laze_file_str);
     }
 
-    board_crate.write_to_directory(out, mode == Mode::Overwrite)?;
-    Ok(())
+    board_crate.render()
 }
 
 fn render_boards_dispatch(boards: &[Board]) -> String {

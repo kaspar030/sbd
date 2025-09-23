@@ -2,13 +2,13 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as _;
 
 use anyhow::{Result, anyhow};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     parse_sbd_files,
     sbd::{Board, SbdFile},
-    utils::write_all,
+    utils::{FileMap, write_all},
 };
 
 #[derive(argh::FromArgs, Debug)]
@@ -20,8 +20,8 @@ pub struct GenerateRiotArgs {
     sbd_dir: String,
 
     /// riot os external boards output dir
-    #[argh(option, short = 'o', default = "String::from(\"riot-os-boards\")")]
-    output: String,
+    #[argh(option, short = 'o', default = "Utf8PathBuf::from(\"riot-os-boards\")")]
+    output: Utf8PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
@@ -126,12 +126,18 @@ impl CFile {
 pub fn generate(args: &GenerateRiotArgs) -> Result<()> {
     let sbd_file = parse_sbd_files(args.sbd_dir.as_str())?;
 
-    render_riot_boards_dir(&sbd_file, args.output.as_str().into())?;
+    let boards_dir = render_riot_boards_dir(&sbd_file)?;
+
+    write_all(
+        &args.output,
+        &boards_dir,
+        /*args.mode == Mode::Overwrite*/ true,
+    )?;
 
     Ok(())
 }
 
-pub fn render_riot_boards_dir(sbd: &SbdFile, out: &Utf8Path) -> Result<()> {
+pub fn render_riot_boards_dir(sbd: &SbdFile) -> Result<FileMap> {
     let chips: HashSet<String> = sbd
         .riot
         .clone()
@@ -174,13 +180,17 @@ pub fn render_riot_boards_dir(sbd: &SbdFile, out: &Utf8Path) -> Result<()> {
         riot_boards.push(generate_riot_board(sbd, &board)?);
     }
 
+    let mut riot_boards_dir = FileMap::new();
     for board in riot_boards {
-        let board_dir = out.join(&board.name);
+        let board_dir = Utf8PathBuf::from(&board.name);
 
-        write_all(&board_dir, board.files.iter())?;
+        for (file, content) in board.files {
+            let full_path = board_dir.join(file);
+            riot_boards_dir.insert(full_path, content);
+        }
     }
 
-    Ok(())
+    Ok(riot_boards_dir)
 }
 
 #[allow(clippy::too_many_lines)]
