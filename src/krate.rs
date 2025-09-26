@@ -15,7 +15,7 @@ impl Crate {
     pub fn new(name: &str) -> Self {
         Self {
             manifest: Manifest::new(name),
-            ..Default::default()
+            files: FileMap::new(),
         }
     }
 

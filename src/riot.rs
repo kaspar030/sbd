@@ -1,10 +1,11 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write as _;
 
 use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
+use crate::filemap::{Mode, parse_mode};
 use crate::{
     filemap::FileMap,
     parse_sbd_files,
@@ -18,6 +19,10 @@ pub struct GenerateRiotArgs {
     /// the name of the directory containing board descriptions
     #[argh(positional)]
     sbd_dir: String,
+
+    /// operation mode: create|check|update
+    #[argh(option, short = 'm', from_str_fn(parse_mode))]
+    mode: Option<Mode>,
 
     /// riot os external boards output dir
     #[argh(option, short = 'o', default = "Utf8PathBuf::from(\"riot-os-boards\")")]
@@ -64,13 +69,13 @@ pub struct RiotChipUartPeripheral {
 
 struct RiotBoard {
     pub name: String,
-    pub files: HashMap<Utf8PathBuf, String>,
+    pub files: FileMap,
 }
 impl RiotBoard {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.into(),
-            files: HashMap::new(),
+            files: FileMap::new(),
         }
     }
 }
@@ -125,10 +130,11 @@ impl CFile {
 
 pub fn generate(args: &GenerateRiotArgs) -> Result<()> {
     let sbd_file = parse_sbd_files(args.sbd_dir.as_str())?;
+    let mode = args.mode.unwrap_or_default();
 
     let boards_dir = render_riot_boards_dir(&sbd_file)?;
 
-    boards_dir.write_all(&args.output, /*args.mode == Mode::Overwrite*/ true)?;
+    mode.apply(&args.output, &boards_dir)?;
 
     Ok(())
 }
@@ -178,12 +184,7 @@ pub fn render_riot_boards_dir(sbd: &SbdFile) -> Result<FileMap> {
 
     let mut riot_boards_dir = FileMap::new();
     for board in riot_boards {
-        let board_dir = Utf8PathBuf::from(&board.name);
-
-        for (file, content) in board.files {
-            let full_path = board_dir.join(file);
-            riot_boards_dir.insert(full_path, content);
-        }
+        riot_boards_dir.extend_subdir(&Utf8PathBuf::from(board.name), board.files);
     }
 
     Ok(riot_boards_dir)

@@ -7,7 +7,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt::Write as _,
-    str::FromStr,
 };
 
 use anyhow::Result;
@@ -15,7 +14,7 @@ use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    filemap::FileMap,
+    filemap::{FileMap, Mode, parse_mode},
     krate::{Crate, DependencyFull},
     laze::{LazeContext, LazeFile, StringOrVecString},
     parse_sbd_files,
@@ -43,31 +42,6 @@ pub struct GenerateArielArgs {
     output: Utf8PathBuf,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub enum Mode {
-    #[default]
-    Create,
-    Update,
-    Check,
-}
-
-impl FromStr for Mode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "create" => Ok(Mode::Create),
-            "update" => Ok(Mode::Update),
-            "check" => Ok(Mode::Check),
-            _ => Err(format!("Invalid mode: {s}")),
-        }
-    }
-}
-
-fn parse_mode(s: &str) -> Result<Mode, String> {
-    Mode::from_str(s)
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct Ariel {
     pub chips: Option<Vec<String>>,
@@ -90,7 +64,7 @@ pub fn generate(args: &GenerateArielArgs) -> Result<()> {
     // Render the ariel crate.
     let krate = render_ariel_board_crate(&sbd_file);
 
-    krate.write_all(&args.output, mode == Mode::Update)?;
+    mode.apply(&args.output, &krate)?;
 
     Ok(())
 }
