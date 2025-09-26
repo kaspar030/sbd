@@ -31,7 +31,7 @@ RUN if test "${DEBIAN_FROM}" = "rust:buster"; then rustup default 1.83 ; fi
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # override this to e.g., "--git https://github.com/kaspar030/laze --rev foo"
-ARG RUST_SOURCE=sbd
+ARG RUST_SOURCE=sbd-gen
 
 # build laze
 RUN cargo install ${RUST_SOURCE}
