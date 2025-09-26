@@ -146,12 +146,9 @@ impl Mode {
                     ));
                 }
                 Mode::Update => {
-                    println!("update check");
                     if let Some(ref tagfile) = tagfile {
-                        println!("update check a");
                         let tagfile_path = outpath.join(tagfile);
                         if !tagfile_path.exists() {
-                            println!("update check b");
                             return Err(anyhow!(
                                 "Refusing to update directory without containing `{tagfile}`."
                             ));
