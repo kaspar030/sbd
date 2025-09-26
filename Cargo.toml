@@ -14,7 +14,7 @@ include = ["src/**/*", "LICENSE-*", "README.md"]
 [dependencies]
 anyhow = "1.0.99"
 argh = "0.1.13"
-camino = "1.1.11"
+camino = "1.2.0"
 indexmap = { version = "2.11.0", features = ["serde"] }
 regex = "1.11.3"
 serde = { version = "1.0.219", features = ["derive"] }
