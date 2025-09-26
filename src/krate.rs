@@ -3,21 +3,23 @@ use std::collections::HashMap;
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
+use crate::filemap::FileMap;
+
 #[derive(Debug, Default)]
 pub struct Crate {
     pub manifest: Manifest,
-    pub files: HashMap<Utf8PathBuf, String>,
+    pub files: FileMap,
 }
 
 impl Crate {
     pub fn new(name: &str) -> Self {
         Self {
             manifest: Manifest::new(name),
-            ..Default::default()
+            files: FileMap::new(),
         }
     }
 
-    pub fn render(mut self) -> HashMap<Utf8PathBuf, String> {
+    pub fn render(mut self) -> FileMap {
         let manifest_content = toml::to_string(&self.manifest).unwrap();
 
         self.files

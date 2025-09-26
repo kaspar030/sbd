@@ -7,7 +7,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt::Write as _,
-    str::FromStr,
 };
 
 use anyhow::Result;
@@ -15,11 +14,11 @@ use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    filemap::{FileMap, Mode, parse_mode},
     krate::{Crate, DependencyFull},
     laze::{LazeContext, LazeFile, StringOrVecString},
     parse_sbd_files,
     sbd::{Board, Button, Led, SbdFile},
-    utils::FileMap,
 };
 
 #[derive(argh::FromArgs, Debug)]
@@ -41,31 +40,6 @@ pub struct GenerateArielArgs {
         default = "Utf8PathBuf::from(\"ariel-os-boards\")"
     )]
     output: Utf8PathBuf,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub enum Mode {
-    #[default]
-    Create,
-    Overwrite,
-    Check,
-}
-
-impl FromStr for Mode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "create" => Ok(Mode::Create),
-            "overwrite" => Ok(Mode::Overwrite),
-            "check" => Ok(Mode::Check),
-            _ => Err(format!("Invalid mode: {s}")),
-        }
-    }
-}
-
-fn parse_mode(s: &str) -> Result<Mode, String> {
-    Mode::from_str(s)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
@@ -90,7 +64,7 @@ pub fn generate(args: &GenerateArielArgs) -> Result<()> {
     // Render the ariel crate.
     let krate = render_ariel_board_crate(&sbd_file);
 
-    crate::utils::write_all(&args.output, &krate, mode == Mode::Overwrite)?;
+    mode.apply(&args.output, &krate)?;
 
     Ok(())
 }
