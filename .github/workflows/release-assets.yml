@@ -16,7 +16,7 @@
 # Reference:
 # https://eugene-babichenko.github.io/blog/2020/05/09/github-actions-cross-platform-auto-releases/
 
-name: release
+name: release-assets
 on:
   release:
     types: [created]
@@ -24,6 +24,9 @@ on:
 jobs:
   build-release:
     name: build-release
+    permissions:
+      contents: write
+
     runs-on: ${{ matrix.os }}
     env:
       # For some builds, we use cross to test on 32-bit and big-endian
