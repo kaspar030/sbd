@@ -221,7 +221,7 @@ fn render_boards_dispatch(boards: &[Board]) -> String {
         let board_name = &board.name;
         let _ = writeln!(s, "if #[cfg(context = \"{board_name}\")] {{");
         let _ = writeln!(s, "    include!(\"{board_name}.rs\");");
-        s.push_str("} else");
+        s.push_str("} else ");
     }
     s.push_str("{\n");
     s.push_str("    /// TODO\n");
