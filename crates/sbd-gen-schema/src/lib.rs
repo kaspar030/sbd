@@ -15,6 +15,7 @@ use crate::{
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SbdFile {
     pub include: Option<Vec<String>>,
     #[serde_as(as = "Option<KeyValueMap<_>>")]
@@ -26,6 +27,7 @@ pub struct SbdFile {
 
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Board {
     #[serde(rename = "$key$")]
     pub name: String,
@@ -72,6 +74,7 @@ impl Board {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+// FIXME: update Ariel and then #[serde(deny_unknown_fields)]
 pub struct Led {
     #[serde(rename = "$key$")]
     pub name: String,
@@ -81,6 +84,7 @@ pub struct Led {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+// FIXME: update Ariel and then #[serde(deny_unknown_fields)]
 pub struct Button {
     #[serde(rename = "$key$")]
     pub name: String,
@@ -89,6 +93,7 @@ pub struct Button {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "snake_case")]
 #[serde(tag = "type")]
 pub enum Quirk {
@@ -96,6 +101,7 @@ pub enum Quirk {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SetPinOp {
     pub description: Option<String>,
     pub pin: String,
@@ -103,6 +109,7 @@ pub struct SetPinOp {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "snake_case")]
 pub enum PinLevel {
     #[default]
@@ -111,6 +118,7 @@ pub enum PinLevel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Debugger {
     #[serde(rename = "type")]
     pub type_: String,
@@ -118,6 +126,7 @@ pub struct Debugger {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Uart {
     #[serde(rename = "$key$")]
     pub name: Option<String>,
