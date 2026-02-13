@@ -5,7 +5,7 @@ description = "A generator for turning SBD (Structured Board Descriptions) into 
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-include = ["src/**/*", "LICENSE-*", "README.md", "sbd-test-files"]
+include = ["src/**/*", "LICENSE-*", "README.md"]
 
 [dependencies]
 anyhow = { workspace = true }
