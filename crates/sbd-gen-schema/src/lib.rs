@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::{KeyValueMap, serde_as};
 
 use crate::{
-    ariel::{Ariel, ArielBoardExt},
+    ariel::{Ariel, ArielTargetExt},
     common::StringOrVecString,
-    riot::{Riot, RiotBoardExt},
+    riot::{Riot, RiotTargetExt},
 };
 
 const fn default_version() -> Version {
@@ -36,7 +36,7 @@ pub struct SbdFile {
     pub version: Version,
     pub include: Option<Vec<String>>,
     #[serde_as(as = "Option<KeyValueMap<_>>")]
-    pub boards: Option<Vec<Board>>,
+    pub targets: Option<Vec<Target>>,
     pub ariel: Option<Ariel>,
     pub riot: Option<Riot>,
     pub description: Option<String>,
@@ -45,7 +45,7 @@ pub struct SbdFile {
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Board {
+pub struct Target {
     #[serde(rename = "$key$")]
     pub name: String,
     pub chip: String,
@@ -56,9 +56,9 @@ pub struct Board {
     #[serde(default)]
     pub quirks: Vec<Quirk>,
     #[serde(default)]
-    pub ariel: ArielBoardExt,
+    pub ariel: ArielTargetExt,
     #[serde(default)]
-    pub riot: RiotBoardExt,
+    pub riot: RiotTargetExt,
     pub debugger: Option<Debugger>,
 
     // peripheral types
@@ -70,7 +70,7 @@ pub struct Board {
     pub uarts: Option<Vec<Uart>>,
 }
 
-impl Board {
+impl Target {
     #[must_use]
     pub fn has_leds(&self) -> bool {
         if let Some(leds) = &self.leds {
