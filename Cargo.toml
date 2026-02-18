@@ -10,8 +10,6 @@ edition = "2024"
 
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ariel-os/sbd"
-homepage = "https://github.com/ariel-os/sbd"
-readme = "README.md"
 
 [workspace.dependencies]
 anyhow = "1.0.101"

@@ -2,10 +2,12 @@
 name = "sbd-gen"
 version = "0.1.11"
 description = "A generator for turning SBD (Structured Board Descriptions) into BSPs."
+categories = ["command-line-utilities", "embedded", "hardware-support"]
+keywords = ["ariel", "board", "bsp", "riot"]
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-include = ["src/**/*", "LICENSE-*", "README.md"]
+include = ["sbd-test-files", "src/**/*", "LICENSE-*", "README.md"]
 
 [dependencies]
 anyhow = { workspace = true }
