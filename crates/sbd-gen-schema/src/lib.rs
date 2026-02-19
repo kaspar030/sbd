@@ -1,6 +1,6 @@
-mod ariel;
+pub mod ariel;
 pub mod common;
-mod riot;
+pub mod riot;
 
 use std::collections::BTreeSet;
 
