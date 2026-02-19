@@ -21,6 +21,7 @@ pub struct SbdFile {
     pub boards: Option<Vec<Board>>,
     pub ariel: Option<Ariel>,
     pub riot: Option<Riot>,
+    pub description: Option<String>,
 }
 
 #[serde_as]
