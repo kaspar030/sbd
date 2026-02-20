@@ -1,0 +1,27 @@
+name: Compile generated files
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Only run this job if the label "generated-files:skip" is NOT present.
+    if: "!contains(github.event.pull_request.labels.*.name, 'generated-files:skip')"
+    steps:
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      with:
+        persist-credentials: false
+    - name: Clone Ariel OS repository
+      run: git clone https://github.com/ariel-os/ariel-os /tmp/ariel-os
+    - name: Build and run sbd-gen on the Ariel OS SBD files
+      run: cargo run -- generate-ariel -m update -o /tmp/ariel-os/src/ariel-os-boards/ /tmp/ariel-os/boards/
+    - name: Build generated Rust files
+      run: |
+        cd /tmp/ariel-os
+        cargo +nightly build -p ariel-os-boards --all-features
