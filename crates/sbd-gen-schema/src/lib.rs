@@ -74,22 +74,35 @@ impl Board {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-// FIXME: update Ariel and then #[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct Led {
     #[serde(rename = "$key$")]
     pub name: String,
     pub pin: String,
     pub color: Option<String>,
-    pub inverted: Option<bool>,
+    pub active: Option<PinActive>,
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-// FIXME: update Ariel and then #[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct Button {
     #[serde(rename = "$key$")]
     pub name: String,
     pub pin: String,
-    pub active_low: Option<bool>,
+    pub active: Option<PinActive>,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub enum PinActive {
+    #[serde(rename = "high")]
+    High,
+    #[serde(rename = "low")]
+    Low,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
