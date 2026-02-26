@@ -23,18 +23,14 @@ boards:
 
     buttons:
       button0:
-        color: green
         pin: P0_11
         active: low
       button1:
-        color: green
         pin: P0_12
         active: low
       button2:
-        color: green
         pin: P0_24
         active: low
       button3:
-        color: green
         pin: P0_25
         active: low
