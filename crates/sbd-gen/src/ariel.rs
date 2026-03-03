@@ -350,17 +350,14 @@ fn render_uarts(uarts: &[Uart]) -> String {
             || format!("_unnamed_uart_{uart_number}").into(),
             std::borrow::Cow::from,
         );
-        let Some(device) = uart.possible_peripherals.as_ref().and_then(|v| v.first()) else {
+        let Some(device) = uart.possible_peripherals.first() else {
             eprintln!(
                 "warning: No peripheral defined for UART, making it unusable in Ariel output."
             );
             eprintln!("Affected UART: {uart:?}");
             continue;
         };
-        if uart
-            .possible_peripherals
-            .as_ref()
-            .is_some_and(|v| v.len() > 1)
+        if uart.possible_peripherals.len() > 1
         {
             eprintln!(
                 "warning: Multiple hardware devices are available, but Ariel OS does not process any but the first."
@@ -391,7 +388,7 @@ fn test_render_uarts() {
             tx_pin: "PC99".to_owned(),
             cts_pin: None,
             rts_pin: None,
-            possible_peripherals: Some(vec!["UART2".to_owned(), "LEUART0".to_owned()]),
+            possible_peripherals: vec!["UART2".to_owned(), "LEUART0".to_owned()],
             host_facing: false,
         },
         Uart {
@@ -400,7 +397,7 @@ fn test_render_uarts() {
             tx_pin: "P1_23".to_owned(),
             cts_pin: Some("P7.89".to_owned()),
             rts_pin: Some("D5".to_owned()),
-            possible_peripherals: Some(vec!["UART1".to_owned(), "LEUART0".to_owned()]),
+            possible_peripherals: vec!["UART1".to_owned(), "LEUART0".to_owned()],
             host_facing: true,
         },
     ]);
