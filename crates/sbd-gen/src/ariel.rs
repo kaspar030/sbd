@@ -6,7 +6,7 @@
 //
 use std::{collections::HashSet, fmt::Write as _};
 
-use anyhow::Result;
+use anyhow::{Context as _, Result, anyhow};
 use camino::Utf8PathBuf;
 
 use crate::{
@@ -14,10 +14,11 @@ use crate::{
     krate::{Crate, DependencyFull},
     laze::{LazeContext, LazeFile},
     parse_sbd_files,
+    resources::Resources,
 };
 
 use sbd_gen_schema::{
-    Button, Led, PinLevel, Quirk, SbdFile, SetPinOp, Target, Uart, common::StringOrVecString,
+    Button, Led, PinLevel, Quirk, SbdFile, SetPinOp, Target, common::StringOrVecString,
 };
 
 #[derive(argh::FromArgs, Debug)]
@@ -46,7 +47,7 @@ pub fn generate(args: &GenerateArielArgs) -> Result<()> {
     let mode = args.mode.unwrap_or_default();
 
     // Render the ariel crate.
-    let krate = render_ariel_board_crate(&sbd_file);
+    let krate = render_ariel_board_crate(&sbd_file)?;
 
     mode.apply(&args.output, &krate)?;
 
@@ -54,7 +55,7 @@ pub fn generate(args: &GenerateArielArgs) -> Result<()> {
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn render_ariel_board_crate(sbd: &SbdFile) -> FileMap {
+pub fn render_ariel_board_crate(sbd: &SbdFile) -> Result<FileMap> {
     let mut board_crate = Crate::new("ariel-os-boards");
 
     let chips: HashSet<String> = sbd
@@ -137,7 +138,8 @@ pub fn render_ariel_board_crate(sbd: &SbdFile) -> FileMap {
             .insert("build.rs".into(), render_build_rs(&targets));
 
         for target in &targets {
-            let target_rs = render_target_rs(target);
+            let target_rs = render_target_rs(target)
+                .with_context(|| anyhow!("cannot render {}", target.name))?;
             board_crate
                 .files
                 .insert(format!("src/{}.rs", target.name).into(), target_rs);
@@ -168,7 +170,9 @@ pub fn render_ariel_board_crate(sbd: &SbdFile) -> FileMap {
                 target_builder.provides.insert("has_buttons".into());
             }
             if target.has_host_facing_uart() {
-                target_builder.provides.insert("has_host_facing_uart".into());
+                target_builder
+                    .provides
+                    .insert("has_host_facing_uart".into());
             }
 
             if let Some(swi) = target.ariel.swi {
@@ -197,7 +201,7 @@ pub fn render_ariel_board_crate(sbd: &SbdFile) -> FileMap {
         board_crate.files.insert("laze.yml".into(), laze_file_str);
     }
 
-    board_crate.render()
+    Ok(board_crate.render())
 }
 
 fn render_targets_dispatch(targets: &[Target]) -> String {
@@ -219,8 +223,136 @@ fn render_targets_dispatch(targets: &[Target]) -> String {
     s
 }
 
-fn render_target_rs(target: &Target) -> String {
-    let pins = render_pins(target);
+struct RenderTarget<'a> {
+    target: &'a Target,
+    resources: Resources<'a>,
+}
+
+impl<'a> RenderTarget<'a> {
+    pub fn new(target: &'a Target) -> Self {
+        let resources = Resources::new(target);
+        Self { target, resources }
+    }
+
+    pub fn render_pins(&mut self) -> Result<String> {
+        let mut pins = String::new();
+
+        pins.push_str("pub mod pins {\n");
+        let target = self.target;
+
+        if target.has_leds() || target.has_buttons() || target.has_uarts() {
+            pins.push_str("use ariel_os_hal::hal::peripherals;\n\n");
+            if let Some(leds) = target.leds.as_ref() {
+                pins.push_str(&self.render_led_pins(leds)?);
+            }
+            if let Some(buttons) = target.buttons.as_ref() {
+                pins.push_str(&self.render_button_pins(buttons)?);
+            }
+            if target.uarts.is_some() {
+                pins.push_str(&self.render_uarts()?);
+            }
+        }
+
+        pins.push_str("}\n");
+
+        Ok(pins)
+    }
+
+    fn render_led_pins(&mut self, leds: &'a [Led]) -> Result<String> {
+        let mut leds_rs = String::new();
+
+        leds_rs.push_str("ariel_os_hal::define_peripherals!(LedPeripherals {\n");
+
+        for led in leds {
+            self.resources.claim(&led.pin, &led.name)?;
+            let _ = writeln!(leds_rs, "{}: {},", led.name, led.pin);
+        }
+
+        leds_rs.push_str("});\n");
+
+        Ok(leds_rs)
+    }
+
+    fn render_button_pins(&mut self, buttons: &'a [Button]) -> Result<String> {
+        let mut buttons_rs = String::new();
+
+        buttons_rs.push_str("ariel_os_hal::define_peripherals!(ButtonPeripherals {\n");
+
+        for button in buttons {
+            self.resources.claim(&button.pin, &button.name)?;
+            let _ = writeln!(buttons_rs, "{}: {},", button.name, button.pin);
+        }
+
+        buttons_rs.push_str("});\n");
+
+        Ok(buttons_rs)
+    }
+
+    fn render_uarts(&mut self) -> Result<String> {
+        let uarts = self.target.uarts.as_ref().unwrap();
+        let mut code = String::new();
+
+        code.push_str("ariel_os_hal::define_uarts![\n");
+
+        for (uart_number, uart) in uarts.iter().enumerate() {
+            let name = uart.name.as_ref().map_or_else(
+                || format!("_unnamed_uart_{uart_number}").into(),
+                std::borrow::Cow::from,
+            );
+
+            {
+                // claim this UART's resources
+                // TODO: "by" could be more specific ("claimed by uart FOO as rx_pin" vs "claimed
+                // by uart FOO")
+                self.resources.claim(&uart.rx_pin, &name)?;
+                self.resources.claim(&uart.tx_pin, &name)?;
+
+                if let Some(ref cts_pin) = uart.cts_pin {
+                    self.resources.claim(cts_pin, &name)?;
+                }
+                if let Some(ref rts_pin) = uart.rts_pin {
+                    self.resources.claim(rts_pin, &name)?;
+                }
+
+                // Note: We claim uart "device" later, after actually figuring out which one to use.
+            }
+
+            let Some(device) = uart.possible_peripherals.first() else {
+                eprintln!(
+                    "warning: No peripheral defined for UART, making it unusable in Ariel output."
+                );
+                eprintln!("Affected UART: {uart:?}");
+                continue;
+            };
+            if uart.possible_peripherals.len() > 1 {
+                eprintln!(
+                    "warning: Multiple hardware devices are available, but Ariel OS does not process any but the first."
+                );
+                eprintln!("Affected UART: {uart:?}");
+            }
+
+            // claiming uart "device" here
+            self.resources.claim(device, &name)?;
+
+            // Deferring to a macro so that any actual logic in there is handled in the OS where it
+            // belongs; this merely processes the data into a format usable there.
+            writeln!(
+                code,
+                "{{ name: {}, device: {}, tx: {}, rx: {}, host_facing: {} }},",
+                name, device, uart.tx_pin, uart.rx_pin, uart.host_facing
+            )
+            .unwrap();
+        }
+
+        code.push_str("];\n");
+
+        Ok(code)
+    }
+}
+
+fn render_target_rs(target: &Target) -> Result<String> {
+    let mut render_target = RenderTarget::new(target);
+    let pins = render_target.render_pins()?;
 
     let mut init_body = String::new();
     handle_quirks(target, &mut init_body);
@@ -229,7 +361,7 @@ fn render_target_rs(target: &Target) -> String {
         "// @generated\n\n{pins}\n#[allow(unused_variables)]\npub fn init(peripherals: &mut ariel_os_hal::hal::OptionalPeripherals) {{\n{init_body}}}\n"
     );
 
-    target_rs
+    Ok(target_rs)
 }
 
 pub fn render_build_rs(targets: &[Target]) -> String {
@@ -289,99 +421,29 @@ fn handle_set_bin_op(set_pin_op: &SetPinOp, init_body: &mut String) {
     init_body.push_str(&code);
 }
 
-fn render_pins(target: &Target) -> String {
-    let mut pins = String::new();
-
-    pins.push_str("pub mod pins {\n");
-
-    if target.has_leds() || target.has_buttons() || target.has_uarts() {
-        pins.push_str("use ariel_os_hal::hal::peripherals;\n\n");
-        if let Some(leds) = target.leds.as_ref() {
-            pins.push_str(&render_led_pins(leds));
-        }
-        if let Some(buttons) = target.buttons.as_ref() {
-            pins.push_str(&render_button_pins(buttons));
-        }
-        if let Some(uarts) = target.uarts.as_ref() {
-            pins.push_str(&render_uarts(uarts));
-        }
+#[cfg(test)]
+#[must_use]
+pub fn test_default_target() -> Target {
+    Target {
+        name: "test-target".to_string(),
+        ariel: sbd_gen_schema::ariel::ArielTargetExt::default(),
+        buttons: None,
+        chip: "test-chip".to_string(),
+        debugger: None,
+        description: None,
+        leds: None,
+        flags: std::collections::BTreeSet::default(),
+        include: None,
+        uarts: None,
+        quirks: vec![],
+        riot: sbd_gen_schema::riot::RiotTargetExt::default(),
     }
-
-    pins.push_str("}\n");
-
-    pins
-}
-
-fn render_led_pins(leds: &[Led]) -> String {
-    let mut leds_rs = String::new();
-
-    leds_rs.push_str("ariel_os_hal::define_peripherals!(LedPeripherals {\n");
-
-    for led in leds {
-        let _ = writeln!(leds_rs, "{}: {},", led.name, led.pin);
-    }
-
-    leds_rs.push_str("});\n");
-
-    leds_rs
-}
-
-fn render_button_pins(buttons: &[Button]) -> String {
-    let mut buttons_rs = String::new();
-
-    buttons_rs.push_str("ariel_os_hal::define_peripherals!(ButtonPeripherals {\n");
-
-    for button in buttons {
-        let _ = writeln!(buttons_rs, "{}: {},", button.name, button.pin);
-    }
-
-    buttons_rs.push_str("});\n");
-
-    buttons_rs
-}
-
-fn render_uarts(uarts: &[Uart]) -> String {
-    let mut code = String::new();
-
-    code.push_str("ariel_os_hal::define_uarts![\n");
-
-    for (uart_number, uart) in uarts.iter().enumerate() {
-        let name = uart.name.as_ref().map_or_else(
-            || format!("_unnamed_uart_{uart_number}").into(),
-            std::borrow::Cow::from,
-        );
-        let Some(device) = uart.possible_peripherals.first() else {
-            eprintln!(
-                "warning: No peripheral defined for UART, making it unusable in Ariel output."
-            );
-            eprintln!("Affected UART: {uart:?}");
-            continue;
-        };
-        if uart.possible_peripherals.len() > 1
-        {
-            eprintln!(
-                "warning: Multiple hardware devices are available, but Ariel OS does not process any but the first."
-            );
-            eprintln!("Affected UART: {uart:?}");
-        }
-        // Deferring to a macro so that any actual logic in there is handled in the OS where it
-        // belongs; this merely processes the data into a format usable there.
-        writeln!(
-            code,
-            "{{ name: {}, device: {}, tx: {}, rx: {}, host_facing: {} }},",
-            name, device, uart.tx_pin, uart.rx_pin, uart.host_facing
-        )
-        .unwrap();
-    }
-
-    code.push_str("];\n");
-
-    code
 }
 
 #[test]
 fn test_render_uarts() {
-    let rendered = render_uarts(&[
+    use sbd_gen_schema::Uart;
+    let uarts = Some(vec![
         Uart {
             name: Some("CON0".to_string()),
             rx_pin: "PA08".to_owned(),
@@ -401,6 +463,15 @@ fn test_render_uarts() {
             host_facing: true,
         },
     ]);
+
+    let target = Target {
+        uarts,
+        ..test_default_target()
+    };
+
+    let mut render_target = RenderTarget::new(&target);
+
+    let rendered = render_target.render_uarts().unwrap();
     assert_eq!(
         rendered,
         "ariel_os_hal::define_uarts![
